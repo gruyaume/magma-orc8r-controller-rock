@@ -9,6 +9,10 @@ on:
 #      - "files/**"
 #      - ".github/workflows/**.yaml"
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
   build:
     uses: ./.github/workflows/build.yaml

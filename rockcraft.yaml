@@ -50,6 +50,10 @@ parts:
       ls /etc/magma/
       cat /etc/profile.d/env.sh
       ls /gomod/src/magma/orc8r/lib/go/protos/go.mod
-      . /etc/profile.d/env.sh && for m in $GOCACHE_MODULES ; do cd ${m}/cloud/go && echo ${m}/cloud/go && go mod download ; done
-      export MAGMA_ROOT=/src/magma
+#      echo "export GO111MODULE=on" >> /etc/profile.d/env.sh
+#      echo "export GOPATH=${USER}/go" >> /etc/profile.d/env.sh
+#      echo "export GOBIN=/build/bin" >> /etc/profile.d/env.sh
+#      echo "export PATH=${PATH}:${GOBIN}:${GOPATH}/bin" >> /etc/profile.d/env.sh
+#      echo "export MAGMA_ROOT=/src/magma" >> /etc/profile.d/env.sh
+#      . /etc/profile.d/env.sh && for m in $GOCACHE_MODULES ; do cd ${m}/cloud/go && echo ${m}/cloud/go && go mod download ; done
 #      cd /src/magma/orc8r/cloud && . /etc/profile.d/env.sh && make tools
