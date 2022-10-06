@@ -1,0 +1,60 @@
+name: Push (main)
+
+on:
+  push:
+#    branches:
+#      - main
+#    paths:
+#      - "rockcraft.yaml"
+#      - "files/**"
+#      - ".github/workflows/**.yaml"
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yaml
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Docker
+        run: |
+          sudo snap install docker
+          sudo addgroup --system docker; sudo adduser $USER docker
+          newgrp docker
+          sudo snap disable docker; sudo snap enable docker
+      - name: Install skopeo
+        run: |
+          sudo snap install --devmode --channel edge skopeo
+      - name: Install yq
+        run: |
+          sudo snap install yq
+      - uses: actions/download-artifact@v3
+        with:
+          name: magma-orc8r-controller-rock
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Import and push to Docker Hub
+        run: |
+          version="$(cat rockcraft.yaml | yq e '.version')"
+          sudo skopeo \
+            --insecure-policy \
+            copy \
+            oci-archive:"magma-orc8r-controller_${version}_amd64.rock" \
+            docker-daemon:"gruyaume/magma-orc8r-controller:${version}"
+          docker push ghcr.io/gruyaume/magma-orc8r-controller:latest
