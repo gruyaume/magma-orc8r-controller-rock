@@ -2,12 +2,12 @@ name: Push (main)
 
 on:
   push:
-#    branches:
-#      - main
-#    paths:
-#      - "rockcraft.yaml"
-#      - "files/**"
-#      - ".github/workflows/**.yaml"
+    branches:
+      - main
+    paths:
+      - "rockcraft.yaml"
+      - "files/**"
+      - ".github/workflows/**.yaml"
 
 env:
   REGISTRY: ghcr.io
