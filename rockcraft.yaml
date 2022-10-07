@@ -34,7 +34,7 @@ parts:
       curl -Lfs https://github.com/google/protobuf/releases/download/v3.1.0/protoc-3.1.0-linux-x86_64.zip -o protoc3.zip && unzip protoc3.zip -d protoc3 && cp -r protoc3/bin/protoc /bin/protoc && chmod a+rx /bin/protoc && cp -r protoc3/include/google /usr/include/ && chmod -R a+Xr /usr/include/google && rm -rf protoc3.zip protoc3
       
       # GO modules
-      export MAGMA_MODULES="orc8r"
+      export MAGMA_MODULES="orc8r lte feg"
       export MAGMA_ROOT=/src/magma
       export GOBIN=/build/bin
       export GO111MODULE=on
@@ -45,16 +45,22 @@ parts:
       mkdir -p gomod/src/magma/orc8r/gateway/go
       mkdir -p gomod/src/magma/orc8r/lib/go
       mkdir -p gomod/src/magma/orc8r/lib/go/protos
+      mkdir -p gomod/src/magma/lte/cloud/go
+      mkdir -p gomod/src/magma/feg/cloud/go
+      mkdir -p gomod/src/magma/feg/cloud/go/protos
       cp $CRAFT_PART_SRC/orc8r/cloud/go/go.mod gomod/src/magma/orc8r/cloud/go/
       cp $CRAFT_PART_SRC/orc8r/lib/go/go.mod gomod/src/magma/orc8r/lib/go/
       cp $CRAFT_PART_SRC/orc8r/lib/go/protos/go.mod gomod/src/magma/orc8r/lib/go/protos/
       cp $CRAFT_PART_SRC/orc8r/gateway/go/go.mod gomod/src/magma/orc8r/gateway/go/
+      cp $CRAFT_PART_SRC/lte/cloud/go/go.mod gomod/src/magma/lte/cloud/go/
+      cp $CRAFT_PART_SRC/feg/cloud/go/go.mod gomod/src/magma/feg/cloud/go/
+      cp $CRAFT_PART_SRC/feg/cloud/go/protos/go.mod gomod/src/magma/feg/cloud/go/protos/
       cp -r gomod /
       cd /gomod/src/magma/cloud/go && echo /gomod/src/magma/cloud/go && go mod download
       . /etc/profile.d/env.sh && for m in $GOCACHE_MODULES ; do cd ${m}/cloud/go && echo ${m}/cloud/go && go mod download ; done
       
       # Src
-      export MAGMA_MODULES="orc8r"
+      export MAGMA_MODULES="orc8r lte feg"
       export MAGMA_ROOT=/src/magma
       export GOBIN=/build/bin
       export GO111MODULE=on
@@ -64,9 +70,11 @@ parts:
       cp -r $CRAFT_PART_SRC/orc8r/cloud src/magma/orc8r/
       cp -r $CRAFT_PART_SRC/orc8r/gateway src/magma/orc8r/
       cp -r $CRAFT_PART_SRC/orc8r/lib src/magma/orc8r/
-      echo $MAGMA_MODULES
+      cp -r $CRAFT_PART_SRC/lte/cloud src/magma/lte/
+      cp -r $CRAFT_PART_SRC/feg/cloud src/magma/feg/
       echo "export MAGMA_MODULES=\"$(for m in $MAGMA_MODULES ; do echo -n /src/magma/$m ; echo -n ' ' ; done)\"" >> /etc/profile.d/env.sh
       cp -r src /
+      mkdir -p /src/magma/lte_tools
       cd /src/magma/orc8r/cloud && . /etc/profile.d/env.sh && make tools
       
       # Compile
@@ -76,6 +84,8 @@ parts:
       mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma
       mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/envdir
       mkdir -p ${CRAFT_PART_INSTALL}/etc/magma/configs/orc8r/
+      mkdir -p ${CRAFT_PART_INSTALL}/etc/magma/configs/feg/
+      mkdir -p ${CRAFT_PART_INSTALL}/etc/magma/configs/lte/
       mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/ui/
       mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/static/
       mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/spec/
@@ -101,6 +111,8 @@ parts:
       cp ${CNTLR_FILES}/create_test_controller_certs ${CRAFT_PART_INSTALL}/usr/local/bin
       cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma
       cp -r $CRAFT_PART_SRC/orc8r/cloud/configs/* ${CRAFT_PART_INSTALL}/etc/magma/configs/orc8r
+      cp -r $CRAFT_PART_SRC/lte/cloud/configs/* ${CRAFT_PART_INSTALL}/etc/magma/configs/lte
+      cp -r $CRAFT_PART_SRC/feg/cloud/configs/* ${CRAFT_PART_INSTALL}/etc/magma/configs/feg
 
   default-config:
     plugin: dump
