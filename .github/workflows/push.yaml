@@ -55,4 +55,4 @@ jobs:
             copy \
             oci-archive:"magma-orc8r-controller_${version}_amd64.rock" \
             docker-daemon:"gruyaume/magma-orc8r-controller:${version}"
-          docker push ghcr.io/gruyaume/magma-orc8r-controller:latest
+          docker push ghcr.io/gruyaume/magma-orc8r-controller:${version}
