@@ -48,6 +48,10 @@ parts:
       cp -r $CRAFT_PART_SRC/orc8r/lib src/magma/orc8r/
       echo "export MAGMA_MODULES=\"$(for m in $MAGMA_MODULES ; do echo -n /src/magma/$m ; echo -n ' ' ; done)\"" >> /etc/profile.d/env.sh
       cp -r src /
+#      cd /src/magma/orc8r/cloud && . /etc/profile.d/env.sh && make tools
+#      mkdir -p configs/orc8r/
+#      cp -r $CRAFT_PART_SRC/orc8r/cloud/configs/ configs/orc8r/
+#      cp -r configs /etc/magma/
 
       # Compile
       
