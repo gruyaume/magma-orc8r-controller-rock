@@ -19,6 +19,12 @@ parts:
     source-tag: v1.6
     build-packages:
       - unzip
+      - wget
+    stage-packages:
+      - daemontools
+      - netcat
+      - openssl
+      - supervisor
     override-build: |
       set -x
       
@@ -44,6 +50,7 @@ parts:
       cp $CRAFT_PART_SRC/orc8r/lib/go/protos/go.mod gomod/src/magma/orc8r/lib/go/protos/
       cp $CRAFT_PART_SRC/orc8r/gateway/go/go.mod gomod/src/magma/orc8r/gateway/go/
       cp -r gomod /
+      cd /gomod/src/magma/cloud/go && echo /gomod/src/magma/cloud/go && go mod download
       . /etc/profile.d/env.sh && for m in $GOCACHE_MODULES ; do cd ${m}/cloud/go && echo ${m}/cloud/go && go mod download ; done
       
       # Src
@@ -61,10 +68,44 @@ parts:
       echo "export MAGMA_MODULES=\"$(for m in $MAGMA_MODULES ; do echo -n /src/magma/$m ; echo -n ' ' ; done)\"" >> /etc/profile.d/env.sh
       cp -r src /
       cd /src/magma/orc8r/cloud && . /etc/profile.d/env.sh && make tools
-      mkdir -p configs/orc8r/
-      cp -r $CRAFT_PART_SRC/orc8r/cloud/configs/ configs/orc8r/
-      cp -r configs /etc/magma/
-#
-#      # Compile
-#
-#      # Production
+      
+      # Compile
+      . /etc/profile.d/env.sh && make build
+      
+      # Structure staging area
+      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma
+      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/envdir
+      mkdir -p ${CRAFT_PART_INSTALL}/etc/magma/configs/orc8r/
+      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/ui/
+      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/static/
+      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/spec/
+      mkdir -p ${CRAFT_PART_INSTALL}/etc/supervisor/conf.d/
+      mkdir -p ${CRAFT_PART_INSTALL}/usr/local/lib/python2.7/dist-packages/
+      
+      # Production
+      export SWAGGER_UI_VERSION="3.1.7"
+      cd /tmp && wget "https://github.com/swagger-api/swagger-ui/archive/v$SWAGGER_UI_VERSION.zip" && unzip "v$SWAGGER_UI_VERSION.zip" -d swagger-ui && mkdir -p /var/opt/magma/static/swagger-ui && cp -r "swagger-ui/swagger-ui-$SWAGGER_UI_VERSION/dist" ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger-ui
+      cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma
+      
+      # Move to stage
+      export SWAGGER_FILES=src/magma/orc8r/cloud/go/obsidian/swagger
+      export CNTLR_FILES=/src/magma/orc8r/cloud/docker/controller
+      cp /src/magma/orc8r/cloud/docker/wait-for-it.sh ${CRAFT_PART_INSTALL}/usr/local/bin
+      cp /${SWAGGER_FILES}/v1/index.html ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/ui/index.html
+      cp /${SWAGGER_FILES}/v1/css/sidebar.css ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/static/sidebar.css
+      cp /${SWAGGER_FILES}/v1/swagger.yml ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/spec/swagger.yml
+      cp -r /src/magma/orc8r/cloud/swagger ${CRAFT_PART_INSTALL}/etc/magma/swagger
+      cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma/bin
+      cp ${CNTLR_FILES}/supervisord.conf ${CRAFT_PART_INSTALL}/etc/supervisor/conf.d/supervisord.conf
+      cp ${CNTLR_FILES}/supervisor_logger.py ${CRAFT_PART_INSTALL}/usr/local/lib/python2.7/dist-packages/supervisor_logger.py
+      cp ${CNTLR_FILES}/create_test_controller_certs ${CRAFT_PART_INSTALL}/usr/local/bin
+      cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma
+      cp -r $CRAFT_PART_SRC/orc8r/cloud/configs/* ${CRAFT_PART_INSTALL}/etc/magma/configs/orc8r
+
+  default-config:
+    plugin: dump
+    source: files
+    organize:
+      001-default.yaml: var/lib/pebble/default/layers/001-default.yaml
+    stage:
+      - var/lib/pebble/default/layers/001-default.yaml

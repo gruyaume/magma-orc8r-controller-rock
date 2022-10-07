@@ -1,0 +1,8 @@
+summary: Initial orc8r config
+description: |
+  Orchestrator service
+services:
+  controller:
+    override: replace
+    command: /usr/bin/envdir /var/opt/magma/envdir /var/opt/magma/bin/orchestrator -logtostderr=true -v=0
+    startup: enabled
