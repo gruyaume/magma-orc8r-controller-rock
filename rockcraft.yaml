@@ -4,7 +4,7 @@ description: |
   Magma Orchestrator Controller
 version: "1.6.0"
 license: Apache-2.0
-base: ubuntu:20.04
+base: ubuntu:18.04
 platforms:
   amd64:
 
@@ -29,6 +29,9 @@ parts:
       # GO modules
       export MAGMA_MODULES="orc8r"
       export MAGMA_ROOT=/src/magma
+      export GOPATH=/home/$USER/go
+      export GOBIN=/build/bin
+      export PATH=${PATH}:${GOBIN}:${GOPATH}/bin
       echo "export GOCACHE_MODULES=\"$(for m in $MAGMA_MODULES ; do echo -n /gomod/src/magma/$m ; echo -n ' ' ; done)\"" >> /etc/profile.d/env.sh
       mkdir -p gomod/src/magma/orc8r/cloud/go
       mkdir -p gomod/src/magma/orc8r/gateway/go
@@ -41,9 +44,13 @@ parts:
       cp -r gomod /
       . /etc/profile.d/env.sh && for m in $GOCACHE_MODULES ; do cd ${m}/cloud/go && echo ${m}/cloud/go && go mod download ; done
       
-      # Src
+      # Src      
       export MAGMA_MODULES="orc8r"
       export MAGMA_ROOT=/src/magma
+      export GOPATH=/home/$USER/go
+      export GOBIN=/build/bin
+      export PATH=${PATH}:${GOBIN}:${GOPATH}/bin
+      export GO111MODULE=on
       mkdir -p src/magma/orc8r
       cp -r $CRAFT_PART_SRC/orc8r/cloud src/magma/orc8r/
       cp -r $CRAFT_PART_SRC/orc8r/gateway src/magma/orc8r/
@@ -55,7 +62,7 @@ parts:
 #      mkdir -p configs/orc8r/
 #      cp -r $CRAFT_PART_SRC/orc8r/cloud/configs/ configs/orc8r/
 #      cp -r configs /etc/magma/
-
-      # Compile
-      
-      # Production
+#
+#      # Compile
+#
+#      # Production
