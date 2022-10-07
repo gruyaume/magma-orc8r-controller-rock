@@ -21,14 +21,14 @@ parts:
       - unzip
     override-build: |
       set -x
-      export MAGMA_MODULES="orc8r"
-      export MAGMA_ROOT=/src/magma
       
       # Golang 1.13
       curl https://facebookconnectivity.jfrog.io/artifactory/generic/go1.13.4.linux-amd64.tar.gz -O && tar xf go1.13.4.linux-amd64.tar.gz && cp -r go/bin/* /usr/local/bin/
       curl -Lfs https://github.com/google/protobuf/releases/download/v3.1.0/protoc-3.1.0-linux-x86_64.zip -o protoc3.zip && unzip protoc3.zip -d protoc3 && cp -r protoc3/bin/protoc /bin/protoc && chmod a+rx /bin/protoc && cp -r protoc3/include/google /usr/include/ && chmod -R a+Xr /usr/include/google && rm -rf protoc3.zip protoc3
 
       # GO modules
+      export MAGMA_MODULES="orc8r"
+      export MAGMA_ROOT=/src/magma
       echo "export GOCACHE_MODULES=\"$(for m in $MAGMA_MODULES ; do echo -n /gomod/src/magma/$m ; echo -n ' ' ; done)\"" >> /etc/profile.d/env.sh
       mkdir -p gomod/src/magma/orc8r/cloud/go
       mkdir -p gomod/src/magma/orc8r/gateway/go
@@ -42,10 +42,13 @@ parts:
       . /etc/profile.d/env.sh && for m in $GOCACHE_MODULES ; do cd ${m}/cloud/go && echo ${m}/cloud/go && go mod download ; done
       
       # Src
+      export MAGMA_MODULES="orc8r"
+      export MAGMA_ROOT=/src/magma
       mkdir -p src/magma/orc8r
       cp -r $CRAFT_PART_SRC/orc8r/cloud src/magma/orc8r/
       cp -r $CRAFT_PART_SRC/orc8r/gateway src/magma/orc8r/
       cp -r $CRAFT_PART_SRC/orc8r/lib src/magma/orc8r/
+      echo $MAGMA_MODULES
       echo "export MAGMA_MODULES=\"$(for m in $MAGMA_MODULES ; do echo -n /src/magma/$m ; echo -n ' ' ; done)\"" >> /etc/profile.d/env.sh
       cp -r src /
 #      cd /src/magma/orc8r/cloud && . /etc/profile.d/env.sh && make tools
