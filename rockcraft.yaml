@@ -8,44 +8,79 @@ base: ubuntu:18.04
 platforms:
   amd64:
 
-entrypoint: ["/bin/pebble", "run", "-v"]
+cmd: ["/usr/bin/envdir", "/var/opt/magma/envdir", "/var/opt/magma/bin/orchestrator", "-logtostderr=true", "-v=0"]
 
 parts:
+
+  src-files:
+    plugin: dump
+    source: files/src
+    stage:
+      - src/magma
+    organize:
+      magma/: src/magma/
+
+  golang:
+    plugin: dump
+    source: https://facebookconnectivity.jfrog.io/artifactory/generic/go1.13.4.linux-amd64.tar.gz
+    override-build: |
+      set -x
+      snap remove go
+      craftctl default
+
+  protobuf:
+    plugin: dump
+    source: https://github.com/google/protobuf/releases/download/v3.1.0/protoc-3.1.0-linux-x86_64.zip
+    stage:
+      - bin/protoc
+    override-stage: |
+      set -x
+      ls
+      cp -r ${CRAFT_PART_INSTALL}/bin/protoc ${CRAFT_STAGE}/bin/protoc
+      craftctl default
 
   magma-orc8r-controller:
     plugin: dump
     source: https://github.com/magma/magma
+    after: [golang, protobuf, src-files]
     source-type: git
     source-tag: v1.6
     build-packages:
+      - bzr
+      - curl
+      - gcc
+      - git
+      - make
       - unzip
-      - wget
+      - vim
+      - protobuf-compiler
     stage-packages:
       - daemontools
       - netcat
       - openssl
       - supervisor
-    build-environment:
-      - MAGMA_ROOT: "/src/magma"
-      - GOBIN: "/build/bin"
-      - GO111MODULE: "on"
-      - GOPATH: "/root/go"
-      - SWAGGER_UI_VERSION: "3.1.7"
-      - GOCACHE_MODULES: "/gomod/src/magma/orc8r /gomod/src/magma/lte /gomod/src/magma/feg"
-      - MAGMA_MODULES: "/src/magma/orc8r /src/magma/lte /src/magma/feg"
-      - SWAGGER_FILES: "src/magma/orc8r/cloud/go/obsidian/swagger"
-      - CNTLR_FILES: "/src/magma/orc8r/cloud/docker/controller"
     override-build: |
       set -x
+      go version
+      protoc version
+
+      export GO111MODULE="on"
+      export GOPATH="/root/go"
+      export GOBIN="/build/bin"
       export PATH=${PATH}:${GOBIN}:${GOPATH}/bin
-      
-      # Golang 1.13
-      snap remove go
-      cd /usr/local && curl https://facebookconnectivity.jfrog.io/artifactory/generic/go1.13.4.linux-amd64.tar.gz -O && tar xf go1.13.4.linux-amd64.tar.gz && cp -r go/bin/* /usr/local/bin/
-      curl -Lfs https://github.com/google/protobuf/releases/download/v3.1.0/protoc-3.1.0-linux-x86_64.zip -o protoc3.zip && unzip protoc3.zip -d protoc3 && cp -r protoc3/bin/protoc /bin/protoc && chmod a+rx /bin/protoc && cp -r protoc3/include/google /usr/include/ && chmod -R a+Xr /usr/include/google && rm -rf protoc3.zip protoc3
-      
+      export MAGMA_ROOT="/src/magma"
+
+      export MAGMA_MODULES="orc8r lte"
+      echo "export GOCACHE_MODULES=\"$(for m in $MAGMA_MODULES ; do echo -n /gomod/src/magma/$m ; echo -n ' ' ; done)\"" >> /etc/profile.d/env.sh
+
       # GO modules
-      mkdir -p gomod/src/magma/orc8r/cloud/go gomod/src/magma/orc8r/gateway/go gomod/src/magma/orc8r/lib/go gomod/src/magma/orc8r/lib/go/protos gomod/src/magma/lte/cloud/go gomod/src/magma/feg/cloud/go gomod/src/magma/feg/cloud/go/protos
+      mkdir -p gomod/src/magma/orc8r/cloud/go
+      mkdir -p gomod/src/magma/orc8r/gateway/go
+      mkdir -p gomod/src/magma/orc8r/lib/go
+      mkdir -p gomod/src/magma/orc8r/lib/go/protos
+      mkdir -p gomod/src/magma/lte/cloud/go
+      mkdir -p gomod/src/magma/feg/cloud/go
+      mkdir -p gomod/src/magma/feg/cloud/go/protos
       cp $CRAFT_PART_SRC/orc8r/cloud/go/go.mod gomod/src/magma/orc8r/cloud/go/
       cp $CRAFT_PART_SRC/orc8r/lib/go/go.mod gomod/src/magma/orc8r/lib/go/
       cp $CRAFT_PART_SRC/orc8r/lib/go/protos/go.mod gomod/src/magma/orc8r/lib/go/protos/
@@ -53,50 +88,46 @@ parts:
       cp $CRAFT_PART_SRC/lte/cloud/go/go.mod gomod/src/magma/lte/cloud/go/
       cp $CRAFT_PART_SRC/feg/cloud/go/go.mod gomod/src/magma/feg/cloud/go/
       cp $CRAFT_PART_SRC/feg/cloud/go/protos/go.mod gomod/src/magma/feg/cloud/go/protos/
-      cp -r gomod /
-      cd /gomod/src/magma/orc8r/cloud/go && go mod download
-      cd /gomod/src/magma/lte/cloud/go && go mod download
-      cd /gomod/src/magma/feg/cloud/go && go mod download
+      cp -rf gomod /
+      export MAGMA_MODULES="orc8r lte"
+      export MAGMA_ROOT="/src/magma"
+      echo "export GOCACHE_MODULES=\"$(for m in $MAGMA_MODULES ; do echo -n /gomod/src/magma/$m ; echo -n ' ' ; done)\"" >> /etc/profile.d/env.sh
+      cat /etc/profile.d/env.sh
+      . /etc/profile.d/env.sh
+      export GO111MODULE="on"
+      export GOBIN="/build/bin"
+      export GOPATH="/root/go"
+      export PATH=${PATH}:${GOBIN}:${GOPATH}/bin
+      ls /gomod/src/magma/lte/cloud/go
+      for m in $GOCACHE_MODULES ; do cd ${m}/cloud/go && echo ${m}/cloud/go && go mod download ; done
 
-      # Src
-      mkdir -p src/magma/orc8r src/magma/lte src/magma/feg src/magma/lte_tools src/magma/feg_tools src/magma/lte_build src/magma/feg_build
-      cp -r $CRAFT_PART_SRC/orc8r/cloud src/magma/orc8r/
-      cp -r $CRAFT_PART_SRC/orc8r/gateway src/magma/orc8r/
-      cp -r $CRAFT_PART_SRC/orc8r/lib src/magma/orc8r/
-      cp -r $CRAFT_PART_SRC/lte/cloud src/magma/lte/
-      cp -r $CRAFT_PART_SRC/feg/cloud src/magma/feg/
-      cp -r src /
-      cd /src/magma/orc8r/cloud && make tools
+      ls $CRAFT_STAGE/src
+      cp -r $CRAFT_STAGE/src /
+
+      export MAGMA_MODULES="orc8r lte"
+      echo "export MAGMA_MODULES=\"$(for m in $MAGMA_MODULES ; do echo -n /src/magma/$m ; echo -n ' ' ; done)\"" >> /etc/profile.d/env.sh
+      cat /etc/profile.d/env.sh
+      cd /src/magma/orc8r/cloud
+
+      . /etc/profile.d/env.sh
+      export GO111MODULE="on"
+      export GOBIN="/build/bin"
+      export GOPATH="/root/go"
+      env
+      make tools
 
       # Compile
-      cd /src/magma/orc8r/cloud && make build
 
-      # Structure staging area
-      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma ${CRAFT_PART_INSTALL}/var/opt/magma/envdir ${CRAFT_PART_INSTALL}/etc/magma/configs/orc8r/ ${CRAFT_PART_INSTALL}/etc/magma/configs/feg/ ${CRAFT_PART_INSTALL}/etc/magma/configs/lte/ ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/ui/ ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/static/ ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/spec/ ${CRAFT_PART_INSTALL}/etc/supervisor/conf.d/ ${CRAFT_PART_INSTALL}/usr/local/lib/python2.7/dist-packages/
-
-      # Production
-      cd /tmp && wget "https://github.com/swagger-api/swagger-ui/archive/v$SWAGGER_UI_VERSION.zip" && unzip "v$SWAGGER_UI_VERSION.zip" -d swagger-ui && mkdir -p /var/opt/magma/static/swagger-ui && cp -r "swagger-ui/swagger-ui-$SWAGGER_UI_VERSION/dist" ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger-ui
-      cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma
-
-      # Move to stage
-      cp /src/magma/orc8r/cloud/docker/wait-for-it.sh ${CRAFT_PART_INSTALL}/usr/local/bin
-      cp /${SWAGGER_FILES}/v1/index.html ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/ui/index.html
-      cp /${SWAGGER_FILES}/v1/css/sidebar.css ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/static/sidebar.css
-      cp /${SWAGGER_FILES}/v1/swagger.yml ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/spec/swagger.yml
-      cp -r /src/magma/orc8r/cloud/swagger ${CRAFT_PART_INSTALL}/etc/magma/swagger
-      cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma/bin
-      cp ${CNTLR_FILES}/supervisord.conf ${CRAFT_PART_INSTALL}/etc/supervisor/conf.d/supervisord.conf
-      cp ${CNTLR_FILES}/supervisor_logger.py ${CRAFT_PART_INSTALL}/usr/local/lib/python2.7/dist-packages/supervisor_logger.py
-      cp ${CNTLR_FILES}/create_test_controller_certs ${CRAFT_PART_INSTALL}/usr/local/bin
-      cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma
-      cp -r $CRAFT_PART_SRC/orc8r/cloud/configs/* ${CRAFT_PART_INSTALL}/etc/magma/configs/orc8r
-      cp -r $CRAFT_PART_SRC/lte/cloud/configs/* ${CRAFT_PART_INSTALL}/etc/magma/configs/lte
-      cp -r $CRAFT_PART_SRC/feg/cloud/configs/* ${CRAFT_PART_INSTALL}/etc/magma/configs/feg
-
-  default-config:
-    plugin: dump
-    source: files
-    organize:
-      001-default.yaml: var/lib/pebble/default/layers/001-default.yaml
-    stage:
-      - var/lib/pebble/default/layers/001-default.yaml
+      cd /src/magma/orc8r/cloud
+      ls
+      export MAGMA_ROOT="/src/magma"
+      export GO111MODULE=on
+      export MAGMA_ROOT=/src/magma
+      export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/build/bin:/go/bin
+      export GOBIN=/build/bin
+      export GOPATH=/go
+      export GOCACHE_MODULES="/gomod/src/magma/orc8r /gomod/src/magma/lte "
+      export MAGMA_MODULES="/src/magma/orc8r /src/magma/lte "
+      env
+      make build
+      ls /build/bin
