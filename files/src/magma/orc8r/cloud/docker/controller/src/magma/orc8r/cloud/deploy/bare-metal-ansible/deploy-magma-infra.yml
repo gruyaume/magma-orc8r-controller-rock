@@ -1,8 +1,0 @@
-- hosts: kube-master[0]
-  become: yes
-  become_user: root
-  roles:
-    - magma/nfs-server-provisioner
-    - magma/kubevirt
-    - magma/metallb
-

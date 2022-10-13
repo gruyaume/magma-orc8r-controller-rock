@@ -1,8 +1,0 @@
-version: "3.7"
-
-services:
-  cache:
-    build:
-      target: gocache
-      context: .
-      dockerfile: $PWD/controller/Dockerfile
