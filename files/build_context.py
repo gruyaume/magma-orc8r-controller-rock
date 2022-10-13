@@ -21,6 +21,7 @@ import glob
 import os
 import shutil
 from collections import namedtuple
+from typing import Iterable
 
 HOST_BUILD_CTX = '/tmp/magma_orc8r_build'
 HOST_MAGMA_ROOT = '../../../.'
@@ -50,44 +51,81 @@ DEPLOYMENT_TO_MODULES = {
     'wifi-f': ['orc8r', 'wifi', 'fbinternal'],
 }
 
+DEPLOYMENTS = DEPLOYMENT_TO_MODULES.keys()
 
 MagmaModule = namedtuple('MagmaModule', ['name', 'host_path'])
 
 
 def main() -> None:
     deployment = "all"
+    mods = _get_modules(DEPLOYMENT_TO_MODULES[deployment])
+    _create_build_context(mods)
+
+
+def _get_modules(mods: Iterable[str]) -> Iterable[MagmaModule]:
+    """
+    Read the modules config file and return all modules specified.
+    """
     modules = []
-    for m in DEPLOYMENT_TO_MODULES[deployment]:
+    for m in mods:
         abspath = os.path.abspath(os.path.join(HOST_MAGMA_ROOT, m))
         module = MagmaModule(name=m, host_path=abspath)
         modules.append(module)
+    return modules
+
+
+def _create_build_context(modules: Iterable[MagmaModule]) -> None:
+    """ Clear out the build context from the previous run """
     shutil.rmtree(HOST_BUILD_CTX, ignore_errors=True)
     os.mkdir(HOST_BUILD_CTX)
+
+    print("Creating build context in '%s'..." % HOST_BUILD_CTX)
     for m in modules:
-        build_ctx = os.path.join(HOST_BUILD_CTX, IMAGE_MAGMA_ROOT, m.name)
+        _copy_module(m)
 
-        def copy_to_ctx(d: str) -> None:
-            shutil.copytree(
-                os.path.join(module.host_path, d),
-                os.path.join(build_ctx, d),
-            )
 
-        copy_to_ctx('cloud')
+def _copy_module(module: MagmaModule) -> None:
+    """ Copy module directory into the build context  """
+    build_ctx = _get_module_host_dst(module)
 
-        if m.name == 'orc8r':
-            copy_to_ctx('lib')
-            copy_to_ctx('gateway')
+    def copy_to_ctx(d: str) -> None:
+        shutil.copytree(
+            os.path.join(module.host_path, d),
+            os.path.join(build_ctx, d),
+        )
 
-        if os.path.isdir(os.path.join(m.host_path, 'cloud', 'configs')):
-            shutil.copytree(
-                os.path.join(m.host_path, 'cloud', 'configs'),
-                os.path.join(HOST_BUILD_CTX, 'configs', m.name),
-            )
+    copy_to_ctx('cloud')
 
-        for f in glob.iglob(build_ctx + '/**/go.mod', recursive=True):
-            gomod = f.replace(HOST_BUILD_CTX, os.path.join(HOST_BUILD_CTX, 'gomod'), )
-            os.makedirs(os.path.dirname(gomod))
-            shutil.copyfile(f, gomod)
+    # Orc8r module also has lib/ and gateway/
+    if module.name == 'orc8r':
+        copy_to_ctx('lib')
+        copy_to_ctx('gateway')
+
+    # Optionally copy cloud/configs/
+    # Converts e.g. lte/cloud/configs/ to configs/lte/
+    if os.path.isdir(os.path.join(module.host_path, 'cloud', 'configs')):
+        shutil.copytree(
+            os.path.join(module.host_path, 'cloud', 'configs'),
+            os.path.join(HOST_BUILD_CTX, 'configs', module.name),
+        )
+
+    # Copy the go.mod file for caching the go downloads
+    # Preserves relative paths between modules
+    for f in glob.iglob(build_ctx + '/**/go.mod', recursive=True):
+        gomod = f.replace(
+            HOST_BUILD_CTX, os.path.join(HOST_BUILD_CTX, 'gomod'),
+        )
+        print(gomod)
+        os.makedirs(os.path.dirname(gomod))
+        shutil.copyfile(f, gomod)
+
+
+def _get_module_host_dst(module: MagmaModule) -> str:
+    """
+    Given a path to a module on the host, return the intended destination
+    in the build context.
+    """
+    return os.path.join(HOST_BUILD_CTX, IMAGE_MAGMA_ROOT, module.name)
 
 
 if __name__ == '__main__':
