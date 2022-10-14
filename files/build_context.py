@@ -21,9 +21,6 @@ def main():
         'orc8r',
         'lte',
         'feg',
-        'cwf',
-        'wifi',
-        'fbinternal',
     ]
     for module_name in modules:
         module_host_path = os.path.abspath(os.path.join(HOST_MAGMA_ROOT, module_name))

@@ -56,7 +56,7 @@ parts:
       - usr/local/lib/python2.7/dist-packages/supervisor_logger.py
       - usr/bin/envdir
     build-environment:
-      - MAGMA_MODULES: "orc8r lte feg cwf wifi fbinternal"
+      - MAGMA_MODULES: "orc8r lte feg"
       - MAGMA_ROOT: "/src/magma"
       - SWAGGER_FILES: "/src/magma/orc8r/cloud/go/obsidian/swagger"
       - CNTLR_FILES: "/src/magma/orc8r/cloud/docker/controller"
@@ -82,12 +82,9 @@ parts:
       cd /gomod/src/magma/orc8r/cloud/go && go mod download
       cd /gomod/src/magma/lte/cloud/go && go mod download
       cd /gomod/src/magma/feg/cloud/go && go mod download
-      cd /gomod/src/magma/cwf/cloud/go && go mod download
-      cd /gomod/src/magma/wifi/cloud/go && go mod download
-      cd /gomod/src/magma/fbinternal/cloud/go && go mod download
 
       # Src: different src depending on MAGMA_MODULES
-      export MAGMA_MODULES="/src/magma/orc8r /src/magma/lte /src/magma/feg /src/magma/cwf /src/magma/wifi /src/magma/fbinternal"
+      export MAGMA_MODULES="/src/magma/orc8r /src/magma/lte /src/magma/feg"
       cp -r /tmp/magma_orc8r_build/src /
       cd /src/magma/orc8r/cloud
       make tools
@@ -115,7 +112,7 @@ parts:
       cp ${SWAGGER_FILES}/v1/index.html ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/ui/index.html
       cp ${SWAGGER_FILES}/v1/css/sidebar.css ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/static/sidebar.css
       cp ${SWAGGER_FILES}/v1/swagger.yml ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/spec/swagger.yml
-      cp -r /src/magma/orc8r/cloud/swagger ${CRAFT_PART_INSTALL}/etc/magma/swagger
+      cp -r /src/magma/orc8r/cloud/swagger ${CRAFT_PART_INSTALL}/etc/magma/
       cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma/bin
 
       # Supervisor configs
