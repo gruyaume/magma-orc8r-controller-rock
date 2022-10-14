@@ -8,95 +8,120 @@ base: ubuntu:18.04
 platforms:
   amd64:
 
-entrypoint: ["/bin/pebble", "run", "-v"]
+cmd: ["/usr/bin/envdir", "/var/opt/magma/envdir", "/var/opt/magma/bin/orchestrator", "-logtostderr=true", "-v=0"]
+
+env:
+  - DATABASE_SOURCE: f"dbname=magma user=username password=password host=127.0.0.1 sslmode=disable"
+  - SQL_DRIVER: postgres
+  - SQL_DIALECT: psql
+  - SERVICE_HOSTNAME: magma-orc8r-certifier
+  - SERVICE_REGISTRY_MODE": k8s
+  - SERVICE_REGISTRY_NAMESPACE": namespace
 
 parts:
+
+  build-context:
+    plugin: dump
+    source: files
+    organize:
+      build_context.py: var/opt/scripts/
+
+  swagger:
+    plugin: dump
+    source: https://github.com/swagger-api/swagger-ui/archive/v3.1.7.zip
+    organize:
+      swagger-ui-3.1.7/dist: var/opt/magma/static/swagger-ui/dist/
+    stage:
+      - var/opt/magma/static/swagger-ui/
 
   magma-orc8r-controller:
     plugin: dump
     source: https://github.com/magma/magma
+    after: [build-context]
     source-type: git
     source-tag: v1.6
     build-packages:
-      - unzip
-      - wget
+      - curl
+      - protobuf-compiler
     stage-packages:
       - daemontools
       - netcat
       - openssl
       - supervisor
+    stage:
+      - var/opt/magma
+      - etc/magma
+      - etc/supervisor
+      - usr/local/bin
+      - usr/local/lib/python2.7/dist-packages/supervisor_logger.py
+      - usr/bin/envdir
     build-environment:
+      - MAGMA_MODULES: "orc8r lte feg"
       - MAGMA_ROOT: "/src/magma"
-      - GOBIN: "/build/bin"
+      - SWAGGER_FILES: "/src/magma/orc8r/cloud/go/obsidian/swagger"
+      - CNTLR_FILES: "/src/magma/orc8r/cloud/docker/controller"
       - GO111MODULE: "on"
       - GOPATH: "/root/go"
-      - SWAGGER_UI_VERSION: "3.1.7"
-      - GOCACHE_MODULES: "/gomod/src/magma/orc8r /gomod/src/magma/lte /gomod/src/magma/feg"
-      - MAGMA_MODULES: "/src/magma/orc8r /src/magma/lte /src/magma/feg"
-      - SWAGGER_FILES: "src/magma/orc8r/cloud/go/obsidian/swagger"
-      - CNTLR_FILES: "/src/magma/orc8r/cloud/docker/controller"
+      - GOBIN: "/build/bin"
     override-build: |
       set -x
+      
       export PATH=${PATH}:${GOBIN}:${GOPATH}/bin
       
-      # Golang 1.13
-      snap remove go
-      cd /usr/local && curl https://facebookconnectivity.jfrog.io/artifactory/generic/go1.13.4.linux-amd64.tar.gz -O && tar xf go1.13.4.linux-amd64.tar.gz && cp -r go/bin/* /usr/local/bin/
-      curl -Lfs https://github.com/google/protobuf/releases/download/v3.1.0/protoc-3.1.0-linux-x86_64.zip -o protoc3.zip && unzip protoc3.zip -d protoc3 && cp -r protoc3/bin/protoc /bin/protoc && chmod a+rx /bin/protoc && cp -r protoc3/include/google /usr/include/ && chmod -R a+Xr /usr/include/google && rm -rf protoc3.zip protoc3
+      # Install golang
+      snap switch go --channel=1.13/stable
+      snap refresh go
+      go version
       
-      # GO modules
-      mkdir -p gomod/src/magma/orc8r/cloud/go gomod/src/magma/orc8r/gateway/go gomod/src/magma/orc8r/lib/go gomod/src/magma/orc8r/lib/go/protos gomod/src/magma/lte/cloud/go gomod/src/magma/feg/cloud/go gomod/src/magma/feg/cloud/go/protos
-      cp $CRAFT_PART_SRC/orc8r/cloud/go/go.mod gomod/src/magma/orc8r/cloud/go/
-      cp $CRAFT_PART_SRC/orc8r/lib/go/go.mod gomod/src/magma/orc8r/lib/go/
-      cp $CRAFT_PART_SRC/orc8r/lib/go/protos/go.mod gomod/src/magma/orc8r/lib/go/protos/
-      cp $CRAFT_PART_SRC/orc8r/gateway/go/go.mod gomod/src/magma/orc8r/gateway/go/
-      cp $CRAFT_PART_SRC/lte/cloud/go/go.mod gomod/src/magma/lte/cloud/go/
-      cp $CRAFT_PART_SRC/feg/cloud/go/go.mod gomod/src/magma/feg/cloud/go/
-      cp $CRAFT_PART_SRC/feg/cloud/go/protos/go.mod gomod/src/magma/feg/cloud/go/protos/
-      cp -r gomod /
+      cp ${CRAFT_STAGE}/var/opt/scripts/build_context.py ${CRAFT_PART_SRC}/orc8r/cloud/docker
+      cd ${CRAFT_PART_SRC}/orc8r/cloud/docker
+      ./build_context.py
+
+      # Gocache: cache Go modules
+      cp -r /tmp/magma_orc8r_build/gomod /
       cd /gomod/src/magma/orc8r/cloud/go && go mod download
       cd /gomod/src/magma/lte/cloud/go && go mod download
       cd /gomod/src/magma/feg/cloud/go && go mod download
 
-      # Src
-      mkdir -p src/magma/orc8r src/magma/lte src/magma/feg src/magma/lte_tools src/magma/feg_tools src/magma/lte_build src/magma/feg_build
-      cp -r $CRAFT_PART_SRC/orc8r/cloud src/magma/orc8r/
-      cp -r $CRAFT_PART_SRC/orc8r/gateway src/magma/orc8r/
-      cp -r $CRAFT_PART_SRC/orc8r/lib src/magma/orc8r/
-      cp -r $CRAFT_PART_SRC/lte/cloud src/magma/lte/
-      cp -r $CRAFT_PART_SRC/feg/cloud src/magma/feg/
-      cp -r src /
-      cd /src/magma/orc8r/cloud && make tools
+      # Src: different src depending on MAGMA_MODULES
+      export MAGMA_MODULES="/src/magma/orc8r /src/magma/lte /src/magma/feg"
+      cp -r /tmp/magma_orc8r_build/src /
+      cd /src/magma/orc8r/cloud
+      make tools
 
-      # Compile
-      cd /src/magma/orc8r/cloud && make build
+      # Configs
+      mkdir -p ${CRAFT_PART_INSTALL}/etc/magma/configs
+      cp -r /tmp/magma_orc8r_build/configs ${CRAFT_PART_INSTALL}/etc/magma/
 
-      # Structure staging area
-      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma ${CRAFT_PART_INSTALL}/var/opt/magma/envdir ${CRAFT_PART_INSTALL}/etc/magma/configs/orc8r/ ${CRAFT_PART_INSTALL}/etc/magma/configs/feg/ ${CRAFT_PART_INSTALL}/etc/magma/configs/lte/ ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/ui/ ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/static/ ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/spec/ ${CRAFT_PART_INSTALL}/etc/supervisor/conf.d/ ${CRAFT_PART_INSTALL}/usr/local/lib/python2.7/dist-packages/
+      # Builder: compile src
+      cd /src/magma/orc8r/cloud
+      make build
 
-      # Production
-      cd /tmp && wget "https://github.com/swagger-api/swagger-ui/archive/v$SWAGGER_UI_VERSION.zip" && unzip "v$SWAGGER_UI_VERSION.zip" -d swagger-ui && mkdir -p /var/opt/magma/static/swagger-ui && cp -r "swagger-ui/swagger-ui-$SWAGGER_UI_VERSION/dist" ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger-ui
-      cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma
-
-      # Move to stage
+      # Script to wait for DB to be reachable
+      mkdir -p ${CRAFT_PART_INSTALL}/usr/local/bin
       cp /src/magma/orc8r/cloud/docker/wait-for-it.sh ${CRAFT_PART_INSTALL}/usr/local/bin
-      cp /${SWAGGER_FILES}/v1/index.html ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/ui/index.html
-      cp /${SWAGGER_FILES}/v1/css/sidebar.css ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/static/sidebar.css
-      cp /${SWAGGER_FILES}/v1/swagger.yml ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/spec/swagger.yml
-      cp -r /src/magma/orc8r/cloud/swagger ${CRAFT_PART_INSTALL}/etc/magma/swagger
+
+      # Empty envdir for overriding in production
+      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/envdir
+
+      # Build artifacts
+      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/ui/
+      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/static/
+      mkdir -p ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/spec/
+      mkdir -p ${CRAFT_PART_INSTALL}/etc/magma/swagger
+      cp ${SWAGGER_FILES}/v1/index.html ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/ui/index.html
+      cp ${SWAGGER_FILES}/v1/css/sidebar.css ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/static/sidebar.css
+      cp ${SWAGGER_FILES}/v1/swagger.yml ${CRAFT_PART_INSTALL}/var/opt/magma/static/swagger/v1/spec/swagger.yml
+      cp -r /src/magma/orc8r/cloud/swagger ${CRAFT_PART_INSTALL}/etc/magma/
       cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma/bin
+
+      # Supervisor configs
+      mkdir -p ${CRAFT_PART_INSTALL}/usr/local/lib/python2.7/dist-packages/
       cp ${CNTLR_FILES}/supervisord.conf ${CRAFT_PART_INSTALL}/etc/supervisor/conf.d/supervisord.conf
       cp ${CNTLR_FILES}/supervisor_logger.py ${CRAFT_PART_INSTALL}/usr/local/lib/python2.7/dist-packages/supervisor_logger.py
-      cp ${CNTLR_FILES}/create_test_controller_certs ${CRAFT_PART_INSTALL}/usr/local/bin
-      cp -r /build/bin ${CRAFT_PART_INSTALL}/var/opt/magma
-      cp -r $CRAFT_PART_SRC/orc8r/cloud/configs/* ${CRAFT_PART_INSTALL}/etc/magma/configs/orc8r
-      cp -r $CRAFT_PART_SRC/lte/cloud/configs/* ${CRAFT_PART_INSTALL}/etc/magma/configs/lte
-      cp -r $CRAFT_PART_SRC/feg/cloud/configs/* ${CRAFT_PART_INSTALL}/etc/magma/configs/feg
 
-  default-config:
-    plugin: dump
-    source: files
-    organize:
-      001-default.yaml: var/lib/pebble/default/layers/001-default.yaml
-    stage:
-      - var/lib/pebble/default/layers/001-default.yaml
+      # Scripts for dev mode
+      cp ${CNTLR_FILES}/create_test_controller_certs ${CRAFT_PART_INSTALL}/usr/local/bin/create_test_controller_certs
+
+      # Configs
+      cp -r /tmp/magma_orc8r_build/configs ${CRAFT_PART_INSTALL}/etc/magma/
